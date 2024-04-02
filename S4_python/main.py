@@ -12,6 +12,7 @@ class Control:
         # Initialisation for the communication
         self.comArduinoPi = ComArduinoPi(com_port="COM5")
         self.comArduinoPi.start()
+        # TEST
 
     def send_message(self, message: str):
         # List of valid messages :
