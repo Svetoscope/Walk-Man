@@ -62,13 +62,23 @@
   const int DXL_DIR_PIN = 2; // DYNAMIXEL Shield DIR PIN
 #endif
 
+// Constant variables 
 const uint8_t DXL_ID1 = 1;
 const uint8_t DXL_ID2 = 2;
 const uint8_t DXL_ID3 = 3;
+const float HOME_DXL1 = 1784; // Home position for DXL_ID1. To calibrate 
+const float HOME_DXL2 = 1650; // Home position for DXL_ID2. To calibrate
+const float HOME_DXL3 = 3000; // Home position for DXL_ID3
+const float MIDDLE_DXL3 = 2607;
+const float DXL3_POS1 = 495; // Position of DXL_ID3 when the pendulum is on the side of leg 2. To calibrate
+const float DXL3_POS2 = 4581; // Position of DXL_ID3 when the pendulum is on the side of leg 1. To calibrate 
+const float INTERMEDIATE_POS = 1000; 
+const float DESIRED_SPEED = 60; // Desired speed for the motor in motion. Adjust to liking 
 const float DXL_PROTOCOL_VERSION = 2.0;
  
-bool init_pos = true;
-bool first = false;
+// Global variables
+bool init_pos = true; // True until all motors have been initialised and are at home position
+bool first = false; // True for the first cycle of loop only
 bool leg1_walk = false;
 bool leg2_walk = false;
 
@@ -85,6 +95,9 @@ void setup() {
   dxl.begin(57600);
   // Set Port Protocol Version. This has to match with DYNAMIXEL protocol version.
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
+
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 30);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 30);
   // Get DYNAMIXEL information
   dxl.ping(DXL_ID1);
   dxl.ping(DXL_ID2);
@@ -100,21 +113,35 @@ void loop() {
 }
 
 void position_init(){
+  // Used to set the motors to their home position
   if (init_pos){
     dxl.torqueOff(DXL_ID1);
     dxl.setOperatingMode(DXL_ID1, OP_POSITION);
     dxl.torqueOn(DXL_ID1);
-    if(dxl.setGoalPosition(DXL_ID1, 1840)){
+    if(dxl.setGoalPosition(DXL_ID1, HOME_DXL1)){
       delay(1000);
     }
+    
 
     dxl.torqueOff(DXL_ID2);
     dxl.setOperatingMode(DXL_ID2, OP_POSITION);
     dxl.torqueOn(DXL_ID2);
-    if(dxl.setGoalPosition(DXL_ID2, 1750)){
+    if(dxl.setGoalPosition(DXL_ID2, HOME_DXL2)){
       delay(1000);
     }
 
+    dxl.torqueOff(DXL_ID3);
+    dxl.setOperatingMode(DXL_ID3, OP_POSITION);
+    dxl.torqueOn(DXL_ID3);
+    if(dxl.setGoalPosition(DXL_ID3, HOME_DXL3)){
+      delay(1000);
+    }
+
+    Serial.print("position 1: "); Serial.println(dxl.getPresentPosition(DXL_ID1));
+    Serial.print("position 2: "); Serial.println(dxl.getPresentPosition(DXL_ID2));
+    Serial.print("position 3: "); Serial.println(dxl.getPresentPosition(DXL_ID3));
+    Serial.println();
+    // Set motors to velocity mode 
     dxl.torqueOff(DXL_ID1);
     dxl.setOperatingMode(DXL_ID1, OP_VELOCITY);
     dxl.torqueOn(DXL_ID1);
@@ -127,15 +154,12 @@ void position_init(){
     dxl.setOperatingMode(DXL_ID3, OP_VELOCITY);
     dxl.torqueOn(DXL_ID3);
 
-    Serial.print("Position 1:"); Serial.println(dxl.getPresentPosition(DXL_ID1));
-    Serial.print("Position 2:"); Serial.println(dxl.getPresentPosition(DXL_ID2));
-    Serial.print("Position 3:"); Serial.println(dxl.getPresentPosition(DXL_ID3));
-
     init_pos = false;
   }
 }
 
 void leg1_walking(){
+  // Used to complete the walking cycle of leg1
   first = true;
   int pos_start;
   int pos_end;
@@ -145,19 +169,20 @@ void leg1_walking(){
       first = false;
     }
    
-
     if((dxl.getPresentPosition(DXL_ID1) > (pos_end - 100)) && (dxl.getPresentPosition(DXL_ID1) < (pos_end + 100))){
-      dxl.torqueOff(DXL_ID1);
+      //dxl.torqueOff(DXL_ID1);
+      dxl.setGoalVelocity(DXL_ID1, 0);
       leg1_walk = false;
       leg2_walk = false;
       break;
     }
     dxl.torqueOn(DXL_ID1);
-    dxl.setGoalVelocity(DXL_ID1, 60);
+    dxl.setGoalVelocity(DXL_ID1, DESIRED_SPEED);
   }
 }
 
 void leg2_walking(){
+  // Used to complete the walking cycle of leg2
   first = true;
   int pos_start;
   int pos_end;
@@ -168,46 +193,63 @@ void leg2_walking(){
     }
 
     if((dxl.getPresentPosition(DXL_ID2) > (pos_end - 100)) && (dxl.getPresentPosition(DXL_ID2) < (pos_end + 100))){
-      dxl.torqueOff(DXL_ID2);
+      //dxl.torqueOff(DXL_ID2);
+      dxl.setGoalVelocity(DXL_ID2, 0);
       leg1_walk = false;
       leg2_walk = false;
       break;
     }
     dxl.torqueOn(DXL_ID2);
-    dxl.setGoalVelocity(DXL_ID2, -60);
+    dxl.setGoalVelocity(DXL_ID2, -1*DESIRED_SPEED);
   }
 }
 
 void pendulum_leg1(){
-  
+  // Used to place the pendulum over leg2
   if(!leg1_walk && !leg2_walk){
     
     dxl.torqueOn(DXL_ID3);
-    dxl.setGoalVelocity(DXL_ID3, -100);
+    dxl.setGoalVelocity(DXL_ID3, -1*DESIRED_SPEED);
     Serial.println("1");
     leg1_walk = true;
     leg2_walk = false;
   }
-  while(!((dxl.getPresentPosition(DXL_ID3) > (1300 - 100)) && (dxl.getPresentPosition(DXL_ID3) < (1300 + 100)))){
-    
+  while(!((dxl.getPresentPosition(DXL_ID3) > ((MIDDLE_DXL3-700) - 100)) && (dxl.getPresentPosition(DXL_ID3) < ((MIDDLE_DXL3-700) + 100)))){
+    /*if(dxl.getPresentPosition(DXL_ID3) < DXL3_POS1){
+      dxl.torqueOff(DXL_ID3);
+      Serial.println("J'ai mis le torque a off sur le pendule 1");
+    }*/
+    Serial.print("position cherché: "); Serial.println(MIDDLE_DXL3-700);
+    Serial.print("position actuel: ");Serial.println(dxl.getPresentPosition(DXL_ID3));
+    delay(100);
   }
+  Serial.println("TorqueOFF");
   dxl.torqueOff(DXL_ID3);
+  //dxl.setGoalVelocity(DXL_ID3, 0);
 }
 
 void pendulum_leg2(){
-  
+  // Used to place the pendulum over leg1
   if(!leg1_walk && !leg2_walk){
     
     dxl.torqueOn(DXL_ID3);
-    dxl.setGoalVelocity(DXL_ID3, 100);
+    dxl.setGoalVelocity(DXL_ID3, DESIRED_SPEED);
     Serial.println("2");
     leg1_walk = false;
     leg2_walk = true;
   }
-  while(!((dxl.getPresentPosition(DXL_ID3) > (5950 - 100)) && (dxl.getPresentPosition(DXL_ID3) < (5950 + 100)))){
-    
+  while(!((dxl.getPresentPosition(DXL_ID3) > ((MIDDLE_DXL3+700) - 100)) && (dxl.getPresentPosition(DXL_ID3) < ((MIDDLE_DXL3+700) + 100)))){
+    /*if(dxl.getPresentPosition(DXL_ID3) > DXL3_POS2){
+      dxl.torqueOff(DXL_ID3);
+      Serial.println("J'ai mis le torque a off sur le pendule 2");
+      Serial.println(dxl.getPresentPosition(DXL_ID3));
+    }*/
+    Serial.print("position cherché: "); Serial.println(MIDDLE_DXL3+700);
+    Serial.print("position actuel: ");Serial.println(dxl.getPresentPosition(DXL_ID3));
+    delay(100);
   }
   dxl.torqueOff(DXL_ID3);
+  //dxl.setGoalVelocity(DXL_ID3, 0);
 }
 
 
