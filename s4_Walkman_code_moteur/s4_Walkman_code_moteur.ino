@@ -69,9 +69,7 @@ const uint8_t DXL_ID3 = 3;
 const float HOME_DXL1 = 1784; // Home position for DXL_ID1. To calibrate 
 const float HOME_DXL2 = 1650; // Home position for DXL_ID2. To calibrate
 const float HOME_DXL3 = 3000; // Home position for DXL_ID3
-const float MIDDLE_DXL3 = 2607;
-const float DXL3_POS1 = 495; // Position of DXL_ID3 when the pendulum is on the side of leg 2. To calibrate
-const float DXL3_POS2 = 4581; // Position of DXL_ID3 when the pendulum is on the side of leg 1. To calibrate 
+const float MIDDLE_DXL3 = 2607; 
 const float INTERMEDIATE_POS = 1000; 
 const float DESIRED_SPEED = 60; // Desired speed for the motor in motion. Adjust to liking 
 const float DXL_PROTOCOL_VERSION = 2.0;
@@ -81,6 +79,8 @@ bool init_pos = true; // True until all motors have been initialised and are at 
 bool first = false; // True for the first cycle of loop only
 bool leg1_walk = false;
 bool leg2_walk = false;
+float DXL3_POS1 = 0; // Position of DXL_ID3 when the pendulum is on the side of leg 2. To calibrate
+float DXL3_POS2 = 0;
 
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 
@@ -102,6 +102,9 @@ void setup() {
   dxl.ping(DXL_ID1);
   dxl.ping(DXL_ID2);
   dxl.ping(DXL_ID3);
+
+  pinMode(6, INPUT_PULLUP);
+  pinMode(7, INPUT_PULLUP);
 }
 
 void loop() {
@@ -121,7 +124,6 @@ void position_init(){
     if(dxl.setGoalPosition(DXL_ID1, HOME_DXL1)){
       delay(1000);
     }
-    
 
     dxl.torqueOff(DXL_ID2);
     dxl.setOperatingMode(DXL_ID2, OP_POSITION);
@@ -131,10 +133,30 @@ void position_init(){
     }
 
     dxl.torqueOff(DXL_ID3);
-    dxl.setOperatingMode(DXL_ID3, OP_POSITION);
-    dxl.torqueOn(DXL_ID3);
-    if(dxl.setGoalPosition(DXL_ID3, HOME_DXL3)){
-      delay(1000);
+    dxl.setOperatingMode(DXL_ID3, OP_VELOCITY);
+    if(digitalRead(6) == LOW){
+      Serial.println("switch 1");
+      DXL3_POS1 = dxl.getPresentPosition(DXL_ID3);
+      while(digitalRead(7) != LOW){
+        dxl.torqueOn(DXL_ID3);
+        dxl.setGoalVelocity(DXL_ID3, 75);
+      }
+      dxl.torqueOff(DXL_ID3);
+      DXL3_POS2 = dxl.getPresentPosition(DXL_ID3);
+    }
+    else if(digitalRead(7) == LOW){
+      Serial.println("switch 2");
+      DXL3_POS2 = dxl.getPresentPosition(DXL_ID3);
+      while(digitalRead(6) != LOW){
+        dxl.torqueOn(DXL_ID3);
+        dxl.setGoalVelocity(DXL_ID3, -75);
+      }
+      dxl.torqueOff(DXL_ID3);
+      DXL3_POS1 = dxl.getPresentPosition(DXL_ID3);
+    }
+    else{
+      Serial.println("else");
+      dxl.torqueOff(DXL_ID3);
     }
 
     Serial.print("position 1: "); Serial.println(dxl.getPresentPosition(DXL_ID1));
@@ -251,6 +273,7 @@ void pendulum_leg2(){
   dxl.torqueOff(DXL_ID3);
   //dxl.setGoalVelocity(DXL_ID3, 0);
 }
+
 
 
 
