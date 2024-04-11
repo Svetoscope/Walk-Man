@@ -466,13 +466,9 @@ void errorMessage(int location){
           break;
       }
     }
+
+    if(Serial.available()){
+      Serial.println("<E>");
+    }
   }
 }
-
-
-
-
-
-
-
-
