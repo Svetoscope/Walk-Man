@@ -79,18 +79,15 @@
 const uint8_t DXL_ID1 = 1;
 const uint8_t DXL_ID2 = 2;
 const uint8_t DXL_ID3 = 3;
-const uint8_t SWITCH_LEG1 = 6;
-const uint8_t SWITCH_LEG2 = 7;
-const float HOME_DXL1 = 3868; // Home position for DXL_ID1. To calibrate 
-const float HOME_DXL2 = 3272; // Home position for DXL_ID2. To calibrate
-const float HOME_DXL3 = 3000; // Home position for DXL_ID3
-const float MIDDLE_DXL3 = 2607; 
-const float INTERMEDIATE_POS = 1000; 
+const uint8_t SWITCH_LEG1 = 6; //pin number for limit switch on right leg
+const uint8_t SWITCH_LEG2 = 7; //pin number for limit switch on left leg
+const float HOME_DXL1 = 345; // Home position for DXL_ID1. To calibrate 
+const float HOME_DXL2 = 2839; // Home position for DXL_ID2. To calibrate
+const float MIDDLE_DXL3 = 2607;
 const float DESIRED_SPEED = 60; // Desired speed for the motor in motion. Adjust to liking 
-const float MIN_SPEED = 30;
-const float MAX_SPEED = 60;
 const float DXL_PROTOCOL_VERSION = 2.0;
-const uint8_t maxChars = 30;
+const uint8_t MAXCHARS = 30;
+const float LIMIT = 110; //Current limit for pendulum motor
 const int PEND_LEG1 = 1;
 const int PEND_LEG2 = 2;
 const int INIT_POS = 3;
@@ -102,13 +99,16 @@ bool first = false; // True for the first cycle of loop only
 bool leg1_walk = false;
 bool leg2_walk = false;
 bool readInProgress = false;
+bool walking = false;
 float dxl3_pos1 = 0; // Position of DXL_ID3 when the pendulum is on the side of leg 2. To calibrate
 float dxl3_pos2 = 0;
 float dxl3_middle = 0;
-char moveQueue[maxChars];
-char state = 'N';
+float leg_speed = 0;
+char moveQueue[MAXCHARS];
+char state = 'P';
 int queueLength = 0;
 int counter = 0;
+
 
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 
@@ -126,8 +126,6 @@ void setup() {
   // Set Port Protocol Version. This has to match with DYNAMIXEL protocol version.
   dxl.setPortProtocolVersion(DXL_PROTOCOL_VERSION);
 
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 30);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 30);
   // Get DYNAMIXEL information
   dxl.ping(DXL_ID1);
   dxl.ping(DXL_ID2);
@@ -148,23 +146,58 @@ void loop() {
   }
 
   switch(state){
-    case 'N':
+    case 'P':
       // Stop the robot
       break;
 
-    case 'W':
+    case 'A':
       // Do one complete cycle of walk
+      leg_speed = DESIRED_SPEED;
       pendulum_leg1();
+      leg1_walking();
+      delay(50);
       leg1_walking();
       pendulum_leg2();
       leg2_walking();
+      delay(50);
+      leg2_walking();
       break;
 
-    case 'S':
+    case 'B':
+      // Do one complete cycle of walk
+      leg_speed = DESIRED_SPEED + 20*1;
+      pendulum_leg1();
+      leg1_walking();
+      delay(50);
+      leg1_walking();
+      pendulum_leg2();
+      leg2_walking();
+      delay(50);
+      leg2_walking();
+      break;
+
+    case 'C':
+      // Do one complete cycle of walk
+      leg_speed = DESIRED_SPEED + 20*2;
+      pendulum_leg1();
+      leg1_walking();
+      delay(50);
+      leg1_walking();
+      pendulum_leg2();
+      leg2_walking();
+      delay(50);
+      leg2_walking();
+      break;
+
+    case 'N':
       // Standing position is the position of initialization 
-      if(counter < 0){
+      /*if(counter < 0){
         init_pos = true;
-      }
+      }*/
+      leg_speed = DESIRED_SPEED;
+      pendulum_leg1();
+      leg1_walking();
+      state = 'P';
       break;
 
     case 'T':
@@ -185,6 +218,7 @@ void position_init(){
   // Used to set the motors to their home position
   dxl.torqueOff(DXL_ID1);
   dxl.setOperatingMode(DXL_ID1, OP_POSITION);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 60);
   dxl.torqueOn(DXL_ID1);
   if(dxl.setGoalPosition(DXL_ID1, HOME_DXL1)){
     delay(1000);
@@ -192,6 +226,7 @@ void position_init(){
 
   dxl.torqueOff(DXL_ID2);
   dxl.setOperatingMode(DXL_ID2, OP_POSITION);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 60);
   dxl.torqueOn(DXL_ID2);
   if(dxl.setGoalPosition(DXL_ID2, HOME_DXL2)){
     delay(1000);
@@ -201,12 +236,10 @@ void position_init(){
   dxl.setOperatingMode(DXL_ID3, OP_VELOCITY);
   if(digitalRead(SWITCH_LEG1) == LOW){
     dxl3_pos1 = dxl.getPresentPosition(DXL_ID3);
-    DEBUG_SERIAL.print("switch 1");
     while(digitalRead(SWITCH_LEG2) != LOW){
-      if(dxl.getPresentCurrent(DXL_ID3) < 100){
+      if(dxl.getPresentCurrent(DXL_ID3) < LIMIT){
         dxl.torqueOn(DXL_ID3);
         dxl.setGoalVelocity(DXL_ID3, 20);
-        DEBUG_SERIAL.println(getPendulumSpeed(dxl.getPresentPosition(DXL_ID3)));
       }else{
         errorMessage(INIT_POS);
       }
@@ -216,12 +249,10 @@ void position_init(){
   }
   else if(digitalRead(SWITCH_LEG2) == LOW){
     dxl3_pos2 = dxl.getPresentPosition(DXL_ID3);
-    DEBUG_SERIAL.print("switch 1");
     while(digitalRead(SWITCH_LEG1) != LOW){
-      if(dxl.getPresentCurrent(DXL_ID3) < 100){
+      if(dxl.getPresentCurrent(DXL_ID3) < LIMIT){
         dxl.torqueOn(DXL_ID3);
         dxl.setGoalVelocity(DXL_ID3, -20);
-        DEBUG_SERIAL.println(dxl.getPresentCurrent(DXL_ID3));
       }else{
         errorMessage(INIT_POS);
       }
@@ -235,10 +266,14 @@ void position_init(){
 
   // Set motors to velocity mode 
   dxl.torqueOff(DXL_ID1);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 1000);
+  dxl.writeControlTableItem(VELOCITY_LIMIT, DXL_ID1, 100);
   dxl.setOperatingMode(DXL_ID1, OP_VELOCITY);
   dxl.torqueOn(DXL_ID1);
 
   dxl.torqueOff(DXL_ID2);
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 1000);
+  dxl.writeControlTableItem(VELOCITY_LIMIT, DXL_ID2, 100);
   dxl.setOperatingMode(DXL_ID2, OP_VELOCITY);
   dxl.torqueOn(DXL_ID2);
 
@@ -267,23 +302,22 @@ void leg1_walking(){
   DEBUG_SERIAL.println("leg1");
   // Used to complete the walking cycle of leg1
   first = true;
+  walking = true;
   int pos_start;
   int pos_end;
-  while(leg1_walk && !leg2_walk){
+  while(walking){
     if(first){
       pos_end = dxl.getPresentPosition(DXL_ID1) + 4095;
       first = false;
     }
    
     if((dxl.getPresentPosition(DXL_ID1) > (pos_end - 100)) && (dxl.getPresentPosition(DXL_ID1) < (pos_end + 100))){
-      //dxl.torqueOff(DXL_ID1);
       dxl.setGoalVelocity(DXL_ID1, 0);
-      leg1_walk = false;
-      leg2_walk = false;
+      walking = false;
       break;
     }
     dxl.torqueOn(DXL_ID1);
-    dxl.setGoalVelocity(DXL_ID1, DESIRED_SPEED);
+    dxl.setGoalVelocity(DXL_ID1, leg_speed);
   }
 }
 
@@ -291,9 +325,10 @@ void leg2_walking(){
   DEBUG_SERIAL.println("leg2");
   // Used to complete the walking cycle of leg2
   first = true;
+  walking = true;
   int pos_start;
   int pos_end;
-  while(!leg1_walk && leg2_walk){
+  while(walking){
     if(first){
       pos_end = dxl.getPresentPosition(DXL_ID2) - 4095;
       first = false;
@@ -302,97 +337,44 @@ void leg2_walking(){
     if((dxl.getPresentPosition(DXL_ID2) > (pos_end - 100)) && (dxl.getPresentPosition(DXL_ID2) < (pos_end + 100))){
       //dxl.torqueOff(DXL_ID2);
       dxl.setGoalVelocity(DXL_ID2, 0);
-      leg1_walk = false;
-      leg2_walk = false;
+      walking = false;
       break;
     }
     dxl.torqueOn(DXL_ID2);
-    dxl.setGoalVelocity(DXL_ID2, -1*DESIRED_SPEED);
+    dxl.setGoalVelocity(DXL_ID2, -1*leg_speed);
   }
 }
 
 void pendulum_leg1(){
   DEBUG_SERIAL.println("pendulum1");
-  if(!leg1_walk && !leg2_walk){
-    if(digitalRead(6) == LOW){
-      while(digitalRead(7) != LOW){
-        if(dxl.getPresentCurrent(DXL_ID3) < 100){
-          dxl.torqueOn(DXL_ID3);
-          dxl.setGoalVelocity(DXL_ID3, getPendulumSpeed(dxl.getPresentPosition(DXL_ID3)));
-        }else{
-          errorMessage(PEND_LEG1);
-        }
-
+  if(digitalRead(6) == LOW){
+    while(digitalRead(7) != LOW){
+      if(dxl.getPresentCurrent(DXL_ID3) < LIMIT){
+        dxl.torqueOn(DXL_ID3);
+        dxl.setGoalVelocity(DXL_ID3, getPendulumSpeed(dxl.getPresentPosition(DXL_ID3)));
+      }else{
+        errorMessage(PEND_LEG1);
       }
-      dxl.torqueOff(DXL_ID3);
+
     }
-    leg1_walk = true;
-    leg2_walk = false;
+    dxl.torqueOff(DXL_ID3);
   }
-  // Used to place the pendulum over leg2
-  /*if(!leg1_walk && !leg2_walk){
-    
-    dxl.torqueOn(DXL_ID3);
-    dxl.setGoalVelocity(DXL_ID3, -1*DESIRED_SPEED);
-    Serial.println("1");
-    leg1_walk = true;
-    leg2_walk = false;
-  }
-  while(!((dxl.getPresentPosition(DXL_ID3) > ((MIDDLE_DXL3-700) - 100)) && (dxl.getPresentPosition(DXL_ID3) < ((MIDDLE_DXL3-700) + 100)))){
-    /*if(dxl.getPresentPosition(DXL_ID3) < DXL3_POS1){
-      dxl.torqueOff(DXL_ID3);
-      Serial.println("J'ai mis le torque a off sur le pendule 1");
-    }
-    Serial.print("position cherché: "); Serial.println(MIDDLE_DXL3-700);
-    Serial.print("position actuel: ");Serial.println(dxl.getPresentPosition(DXL_ID3));
-    delay(100);
-  }
-  Serial.println("TorqueOFF");
-  dxl.torqueOff(DXL_ID3);
-  //dxl.setGoalVelocity(DXL_ID3, 0);
-  */
 }
 
 void pendulum_leg2(){
   // Used to place the pendulum over leg1
   DEBUG_SERIAL.println("pendulum2");
-  if(!leg1_walk && !leg2_walk){
-    if(digitalRead(7) == LOW){
-      while(digitalRead(6) != LOW){
-        if(dxl.getPresentCurrent(DXL_ID3) < 100){
-          dxl.torqueOn(DXL_ID3);
-          dxl.setGoalVelocity(DXL_ID3, getPendulumSpeed(dxl.getPresentPosition(DXL_ID3)) * -1);
-        }else{
-          errorMessage(PEND_LEG2);
-        }
+  if(digitalRead(7) == LOW){
+    while(digitalRead(6) != LOW){
+      if(dxl.getPresentCurrent(DXL_ID3) < LIMIT){
+        dxl.torqueOn(DXL_ID3);
+        dxl.setGoalVelocity(DXL_ID3, getPendulumSpeed(dxl.getPresentPosition(DXL_ID3)) * -1);
+      }else{
+        errorMessage(PEND_LEG2);
       }
-      dxl.torqueOff(DXL_ID3);
     }
-    leg1_walk = false;
-    leg2_walk = true;
+    dxl.torqueOff(DXL_ID3);
   }
-  /*
-  if(!leg1_walk && !leg2_walk){
-    
-    dxl.torqueOn(DXL_ID3);
-    dxl.setGoalVelocity(DXL_ID3, DESIRED_SPEED);
-    Serial.println("2");
-    leg1_walk = false;
-    leg2_walk = true;
-  }
-  while(!((dxl.getPresentPosition(DXL_ID3) > ((MIDDLE_DXL3+700) - 100)) && (dxl.getPresentPosition(DXL_ID3) < ((MIDDLE_DXL3+700) + 100)))){
-    /*if(dxl.getPresentPosition(DXL_ID3) > DXL3_POS2){
-      dxl.torqueOff(DXL_ID3);
-      Serial.println("J'ai mis le torque a off sur le pendule 2");
-      Serial.println(dxl.getPresentPosition(DXL_ID3));
-    }
-    Serial.print("position cherché: "); Serial.println(MIDDLE_DXL3+700);
-    Serial.print("position actuel: ");Serial.println(dxl.getPresentPosition(DXL_ID3));
-    delay(100);
-  }
-  dxl.torqueOff(DXL_ID3);
-  //dxl.setGoalVelocity(DXL_ID3, 0);
-  */
 }
 
 float getPendulumSpeed(float pos){
@@ -419,9 +401,9 @@ void readSerial(){
       if(lastCharRead != endMarker){
         
         if(lastCharRead == 'F'){
-          msgToSend[1] = state;
-        }
-        else{
+          msgToSend[1] = 'R';
+          state = 'P';
+        }else{
           msgToSend[1] = lastCharRead;
           addToQueue(lastCharRead);
           DEBUG_SERIAL.print("adding to queue: ");
@@ -467,14 +449,17 @@ void errorMessage(int location){
       switch(location){
         case PEND_LEG1:
           Serial.println("Motor 3 has reached the current limit during the pendulum for leg 1 movement (pendulum_leg1) and is now in emergency stop");
+          messageWritten = true;
           break;
 
         case PEND_LEG2:
           Serial.println("Motor 3 has reached the current limit during the pendulum for leg 2 movement (pendulum_leg2) and is now in emergency stop");
+          messageWritten = true;
           break;
 
         case INIT_POS:
           Serial.println("Motor 3 has reached the current limit during the initialization (position_init) and is now in emergency stop");
+          messageWritten = true;
           break;
 
         default:
