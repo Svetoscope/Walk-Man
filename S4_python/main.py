@@ -1,48 +1,58 @@
-import sys
 import threading
 import time
 from queue import Queue
-from ComArduinoPi import ComArduinoPi
+from ComArduino import ComArduino
 from UserInterface import UserInterface
 from PyQt5.QtWidgets import QApplication
 
-
+# Define the Control class
 class Control:
     def __init__(self):
-        # Initialisation for the communication
-        self.comArduinoPi = ComArduinoPi(com_port="COM5")
-        self.comArduinoPi.start()
-        # TEST
+        # Initialize ComArduino instance
+        self.comArduino = ComArduino()
+        # Start communication with Arduino or OpenRB
+        self.comArduino.start()
 
+    # Method to send a message to Arduino or OpenRB
     def send_message(self, message: str):
-        # List of valid messages :
-        # <R> : Start a right leg sequence
-        # <L> : Start a left leg sequence
-        # <S> : Start a standing sequence
-        # <F> : Ask for feedback
-        self.comArduinoPi.send_to_arduino(message)
+        """
+        List of valid messages :
+        <A> : Driving motors at speed 1
+        <B> : Driving motors at speed 2
+        <C> : Driving motors at speed 3
+        <N> : Neutral state
+        <P> : Parking robot
+        <F> : Asking for feedback
+        """
+        self.comArduino.send_to_arduino(message)
 
+    # Method to get the answer from Arduino or OpenRB
     def get_answer(self) -> str:
-        # List of valid answers
-        # <R> : Executing a right leg sequence
-        # <L> : Executing a left leg sequence
-        # <S> : Executing a standing sequence
-        # <N> : No sequence being executed
-        return self.comArduinoPi.msg_received
+        """
+        List of valid answers :
+        <A> : Driving motors at speed 1
+        <B> : Driving motors at speed 2
+        <C> : Driving motors at speed 3
+        <N> : Neutral state
+        <P> : Parking robot
+        <R> : Ready to start another sequence
+        """
+        return self.comArduino.msg_received
+        
 
-
+# Function to handle switch cases for Arduino or OpenRB answers
 def msg_switch_case(arduino_answer) -> int:
-    if arduino_answer == 'R' or arduino_answer == 'L' or arduino_answer == 'S':
+    if arduino_answer == 'D1' or arduino_answer == 'D2' or arduino_answer == 'D3' or arduino_answer == 'N' or arduino_answer == 'P':
         # Wait for the sequence to be finished
         return 0
-    elif arduino_answer == 'N':
+    elif arduino_answer == 'R':
         # Ready to start another sequence
         return 1
     else:
         # Error
         return -1
 
-
+# Function to scan UI queue
 def scan_ui_queue(self, my_queue):
     while True:
         if self.UI_queue.empty():
@@ -50,20 +60,18 @@ def scan_ui_queue(self, my_queue):
         else:
             my_queue.put(self.UI_queue.get())
 
-
+# Function to run the user interface
 def run_user_interface(ui_closed_flag, ui_queue, ui_start_flag, ui_update_flag):
-    # Initialisation of the user interface
+    # Initialization of the user interface
     app = QApplication([])
     window = UserInterface(ui_queue, ui_start_flag, ui_update_flag)
     window.show()
     app.exec_()
     ui_closed_flag.set()
 
-
-def main1() -> None:
-    # main1 is a test main implementing the ui and the communication arduino-pi
-
-    # Creation of variables linked to the thread of the ui
+# Main function
+def main() -> None:
+    # Create variables linked to the thread of the UI
     ui_queue = Queue()
     ui_update_flag = threading.Event()
     ui_start_flag = threading.Event()
@@ -71,37 +79,62 @@ def main1() -> None:
     ui_thread = threading.Thread(target=run_user_interface, args=(ui_closed_flag, ui_queue, ui_start_flag, ui_update_flag))
     ui_thread.start()
 
+    # Initialize Control instance
     controller = Control()
 
     error_count = 0
-
     # INIT COM
     message = 'F'
     controller.send_message(message)
     print("Message sent : ", message)
     time.sleep(1)
-    message = 'N'
+
+    message = 'F'
     controller.send_message(message)
     print("Message sent : ", message)
     time.sleep(1)
-    answer = controller.get_answer()
-    print("Arduino reply OUT: ", answer)
+
+    checked_answer_flag = False
+    allow_new_command_flag = False
+    last_walking_speed = ""
+    keep_walking_flag = False
 
     while not ui_closed_flag.is_set():
-        if ui_start_flag.is_set() and not ui_queue.empty() and controller.comArduinoPi.new_msg_flag:
-            controller.comArduinoPi.new_msg_flag = False
+        # print("Loop")
+        if controller.comArduino.new_msg_flag:
+            controller.comArduino.new_msg_flag = False
             answer = controller.get_answer()
-            print("Arduino reply OUT: ", answer)
+            print("Arduino reply : ", answer)
             state = msg_switch_case(answer)
+            checked_answer_flag = False
+
+        if ui_start_flag.is_set() and not checked_answer_flag:
+            checked_answer_flag = True
+            allow_new_command_flag = True
 
             if message != 'F' and answer != message:  # Means last sequence asked didn't start
                 error_count += 1
             else:
+                # print('State : ', state)
                 if state == 1:  # Ready to start another sequence
+                    print('Ready to start another sequence')
                     error_count = 0
-                    message = ui_queue.get()
+                    if ui_queue.empty() and keep_walking_flag:
+                        print('Keep walking')
+                        message = last_walking_speed
+                        keep_walking_flag = False
+                    else:
+                        print('Wait new command')
+                        message = ui_queue.get()
+                    
                     ui_update_flag.set()
+                    if message == 'A' or message == 'B' or message == 'C':
+                        last_walking_speed = message
+                        keep_walking_flag = True
+                    else:
+                        keep_walking_flag = False
                 elif state == 0:  # Wait for the sequence to be finished
+                    print('Wait for the sequence to be finished')
                     error_count = 0
                     message = 'F'
                 else:
@@ -112,150 +145,16 @@ def main1() -> None:
             if error_count > 3:
                 break
 
+        if ui_start_flag.is_set() and checked_answer_flag and allow_new_command_flag:
             controller.send_message(message)
             print("Message sent : ", message)
-        time.sleep(1)
-
-    print('DONE')
-    ui_thread.join()
-    return
-
-
-def main2() -> None:
-    # main2 is a test main implementing only the ui
-
-    # Creation of variables linked to the thread of the ui
-    ui_queue = Queue()
-    ui_update_flag = threading.Event()
-    ui_start_flag = threading.Event()
-    ui_closed_flag = threading.Event()
-    ui_thread = threading.Thread(target=run_user_interface, args=(ui_closed_flag, ui_queue, ui_start_flag, ui_update_flag))
-    ui_thread.start()
-
-    # controller = Control()
-
-    error_count = 0
-
-    # INIT COM
-    message = 'F'
-    # controller.send_message(message)
-    print("Message sent : ", message)
-    time.sleep(1)
-
-    while not ui_closed_flag.is_set():
-        print('In while')
-        print(ui_start_flag.is_set())
-        # if start_flag and not ui_queue.empty() and controller.comArduinoPi.new_msg_flag:
-        if ui_start_flag.is_set() and not ui_queue.empty():
-            """
-
-            controller.comArduinoPi.new_msg_flag = False
-            answer = controller.get_answer()
-            print("Arduino reply OUT: ", answer)
-            state = msg_switch_case(answer)
-
-            if message != 'F' and answer != message:  # Means last sequence asked didn't start
-                error_count += 1
-            else:
-                if state == 1:  # Ready to start another sequence
-                    error_count = 0
-                    message = ui_queue.get()
-                elif state == 0:  # Wait for the sequence to be finished
-                    error_count = 0
-                    message = 'F'
-                else:
-                    print('Invalid Arduino answer')
-                    error_count += 1
-                    message = 'F'
-
-            if error_count > 3:
-                break
-            """
-
-            print('Processing')
-            message = ui_queue.get()
-            ui_update_flag.set()
-            # controller.send_message(message)
-            print("Message sent : ", message)
+            allow_new_command_flag = False
 
         time.sleep(1)
 
-    print('DONE')
     ui_thread.join()
-    return
-
-
-def main3() -> None:
-    # main1 is a test main implementing only the communication arduino-pi
-
-    # Creation of variables replacing the ui
-    controller = Control()
-    sequence_queue = Queue()
-
-    sequence_queue.put('R')
-    sequence_queue.put('L')
-    sequence_queue.put('R')
-    sequence_queue.put('L')
-    sequence_queue.put('S')
-    sequence_queue.put('R')
-    sequence_queue.put('L')
-    sequence_queue.put('S')
-
-    error_count = 0
-
-    message = 'F'
-    controller.send_message(message)
-    print("Message sent : ", message)
-    time.sleep(1)
-    message = sequence_queue.get()
-
-    while True:
-        message = sequence_queue.get()
-        controller.send_message(message)
-        print("Message sent : ", message)
-
-        time.sleep(0.5)
-
-        answer = controller.get_answer()
-        print("Arduino reply OUT: ", answer)
-
-        time.sleep(0.5)
-        """
-        if controller.comArduinoPi.new_msg_flag:
-            controller.comArduinoPi.new_msg_flag = False
-            answer = controller.get_answer()
-            print("Arduino reply OUT: ", answer)
-            state = msg_switch_case(answer)
-
-            if message != 'F' and answer != message:  # Means last sequence asked didn't start
-                error_count += 1
-            else:
-                if state == 1:  # Ready to start another sequence
-                    error_count = 0
-                    message = sequence_queue.get()
-                elif state == 0:  # Wait for the sequence to be finished
-                    error_count = 0
-                    message = 'F'
-                else:
-                    print('Invalid Arduino answer')
-                    error_count += 1
-                    message = 'F'
-
-            if error_count > 3:
-                break
-
-            controller.send_message(message)
-            print("Message sent : ", message)
-
-        time.sleep(0.05)
-
-        if sequence_queue.empty():
-            break
-        """
-
-    controller.comArduinoPi.terminate()
     return
 
 
 if __name__ == "__main__":
-    main3()
+    main()
