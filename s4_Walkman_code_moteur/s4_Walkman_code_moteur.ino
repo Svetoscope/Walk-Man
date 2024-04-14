@@ -131,13 +131,15 @@ void setup() {
   dxl.ping(DXL_ID2);
   dxl.ping(DXL_ID3);
 
+  // Puts limit switches pins in input_pullup mode
   pinMode(SWITCH_LEG1, INPUT_PULLUP);
   pinMode(SWITCH_LEG2, INPUT_PULLUP);
 }
 
 void loop() {
+  // Only does this function once
   if(init_pos){
-    position_init();
+    position_init(); // Sets motors to their home position
   }
   if(queueLength != 0){
     state = moveQueue[0];
@@ -151,7 +153,7 @@ void loop() {
       break;
 
     case 'A':
-      // Do one complete cycle of walk
+      // Do one complete cycle of walk at slow speed
       leg_speed = DESIRED_SPEED;
       pendulum_leg1();
       leg1_walking();
@@ -164,7 +166,7 @@ void loop() {
       break;
 
     case 'B':
-      // Do one complete cycle of walk
+      // Do one complete cycle of walk at medium speed
       leg_speed = DESIRED_SPEED + 20*1;
       pendulum_leg1();
       leg1_walking();
@@ -177,7 +179,7 @@ void loop() {
       break;
 
     case 'C':
-      // Do one complete cycle of walk
+      // Do one complete cycle of walk at fast speed
       leg_speed = DESIRED_SPEED + 20*2;
       pendulum_leg1();
       leg1_walking();
@@ -191,9 +193,6 @@ void loop() {
 
     case 'N':
       // Standing position is the position of initialization 
-      /*if(counter < 0){
-        init_pos = true;
-      }*/
       leg_speed = DESIRED_SPEED;
       pendulum_leg1();
       leg1_walking();
@@ -217,23 +216,26 @@ void loop() {
 void position_init(){
   // Used to set the motors to their home position
   dxl.torqueOff(DXL_ID1);
-  dxl.setOperatingMode(DXL_ID1, OP_POSITION);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 60);
+  dxl.setOperatingMode(DXL_ID1, OP_POSITION); //Sets motor to position mode
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID1, 60); // Sets maximum speed of motor
   dxl.torqueOn(DXL_ID1);
+  // Sends motor to a certain position (home in this case)
   if(dxl.setGoalPosition(DXL_ID1, HOME_DXL1)){
     delay(1000);
   }
 
   dxl.torqueOff(DXL_ID2);
-  dxl.setOperatingMode(DXL_ID2, OP_POSITION);
-  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 60);
+  dxl.setOperatingMode(DXL_ID2, OP_POSITION); // Sets motor to position mode
+  dxl.writeControlTableItem(PROFILE_VELOCITY, DXL_ID2, 60); // Sets maximum speed of motor
   dxl.torqueOn(DXL_ID2);
+  // Sends motor to a certain position (home in this case)
   if(dxl.setGoalPosition(DXL_ID2, HOME_DXL2)){
     delay(1000);
   }
 
   dxl.torqueOff(DXL_ID3);
-  dxl.setOperatingMode(DXL_ID3, OP_VELOCITY);
+  dxl.setOperatingMode(DXL_ID3, OP_VELOCITY); // Sets motor to velocity mode
+  // Pendulum initialization if it's over leg 1
   if(digitalRead(SWITCH_LEG1) == LOW){
     dxl3_pos1 = dxl.getPresentPosition(DXL_ID3);
     while(digitalRead(SWITCH_LEG2) != LOW){
@@ -245,8 +247,9 @@ void position_init(){
       }
     }
     dxl.torqueOff(DXL_ID3);
-    dxl3_pos2 = dxl.getPresentPosition(DXL_ID3);
+    dxl3_pos2 = dxl.getPresentPosition(DXL_ID3); // Used to find vertical position of pendulum
   }
+  // Pendulum initialization if it's over leg 2
   else if(digitalRead(SWITCH_LEG2) == LOW){
     dxl3_pos2 = dxl.getPresentPosition(DXL_ID3);
     while(digitalRead(SWITCH_LEG1) != LOW){
@@ -257,8 +260,8 @@ void position_init(){
         errorMessage(INIT_POS);
       }
     }
-    dxl3_pos1 = dxl.getPresentPosition(DXL_ID3);
     dxl.torqueOff(DXL_ID3);
+    dxl3_pos1 = dxl.getPresentPosition(DXL_ID3); // Used to find vertical position of pendulum
   }
   else{
     dxl.torqueOff(DXL_ID3);
@@ -281,7 +284,7 @@ void position_init(){
   dxl.setOperatingMode(DXL_ID3, OP_VELOCITY);
   dxl.torqueOn(DXL_ID3);
 
-  init_pos = false;
+  init_pos = false; // Disables this function
   DEBUG_SERIAL.println("end init");
 
   
@@ -290,6 +293,7 @@ void position_init(){
     dxl3_pos2 = dxl3_pos2 + 4095;
   }
   float ecart = dxl3_pos2-dxl3_pos1;
+  // Finds the vertical position of pendulum
   if((int(ecart) % 2) == 0){
     dxl3_middle = ecart/2;
   }else{
@@ -307,10 +311,10 @@ void leg1_walking(){
   int pos_end;
   while(walking){
     if(first){
-      pos_end = dxl.getPresentPosition(DXL_ID1) + 4095;
+      pos_end = dxl.getPresentPosition(DXL_ID1) + 4095; // End position after one complete cycle
       first = false;
     }
-   
+    // End of cycle conditions
     if((dxl.getPresentPosition(DXL_ID1) > (pos_end - 100)) && (dxl.getPresentPosition(DXL_ID1) < (pos_end + 100))){
       dxl.setGoalVelocity(DXL_ID1, 0);
       walking = false;
@@ -330,10 +334,10 @@ void leg2_walking(){
   int pos_end;
   while(walking){
     if(first){
-      pos_end = dxl.getPresentPosition(DXL_ID2) - 4095;
+      pos_end = dxl.getPresentPosition(DXL_ID2) - 4095; // End position after one complete cycle
       first = false;
     }
-
+    // End of cycle conditions
     if((dxl.getPresentPosition(DXL_ID2) > (pos_end - 100)) && (dxl.getPresentPosition(DXL_ID2) < (pos_end + 100))){
       //dxl.torqueOff(DXL_ID2);
       dxl.setGoalVelocity(DXL_ID2, 0);
@@ -341,7 +345,7 @@ void leg2_walking(){
       break;
     }
     dxl.torqueOn(DXL_ID2);
-    dxl.setGoalVelocity(DXL_ID2, -1*leg_speed);
+    dxl.setGoalVelocity(DXL_ID2, -1*leg_speed); // Negative speed for counter clock wise rotation
   }
 }
 
@@ -349,9 +353,9 @@ void pendulum_leg1(){
   DEBUG_SERIAL.println("pendulum1");
   if(digitalRead(6) == LOW){
     while(digitalRead(7) != LOW){
-      if(dxl.getPresentCurrent(DXL_ID3) < LIMIT){
+      if(dxl.getPresentCurrent(DXL_ID3) < LIMIT){ // Condition for current limit in motor
         dxl.torqueOn(DXL_ID3);
-        dxl.setGoalVelocity(DXL_ID3, getPendulumSpeed(dxl.getPresentPosition(DXL_ID3)));
+        dxl.setGoalVelocity(DXL_ID3, getPendulumSpeed(dxl.getPresentPosition(DXL_ID3))); // Speed of pendulum proportionnal to its position
       }else{
         errorMessage(PEND_LEG1);
       }
@@ -366,9 +370,9 @@ void pendulum_leg2(){
   DEBUG_SERIAL.println("pendulum2");
   if(digitalRead(7) == LOW){
     while(digitalRead(6) != LOW){
-      if(dxl.getPresentCurrent(DXL_ID3) < LIMIT){
+      if(dxl.getPresentCurrent(DXL_ID3) < LIMIT){ // Condition for current limit in pendulum
         dxl.torqueOn(DXL_ID3);
-        dxl.setGoalVelocity(DXL_ID3, getPendulumSpeed(dxl.getPresentPosition(DXL_ID3)) * -1);
+        dxl.setGoalVelocity(DXL_ID3, getPendulumSpeed(dxl.getPresentPosition(DXL_ID3)) * -1); // Speed of pendulum proportionnal to its position
       }else{
         errorMessage(PEND_LEG2);
       }
@@ -378,6 +382,7 @@ void pendulum_leg2(){
 }
 
 float getPendulumSpeed(float pos){
+  // Returns a speed proportionnal to position that is in argument
   float speed = (abs(dxl3_middle - pos)/dxl3_middle + 1) * 20;
    
   return speed;
