@@ -76,18 +76,17 @@
 #endif
 
 // Constant variables 
-const uint8_t DXL_ID1 = 1;
-const uint8_t DXL_ID2 = 2;
-const uint8_t DXL_ID3 = 3;
+const uint8_t DXL_ID1 = 1; // ID of leg 1 motor
+const uint8_t DXL_ID2 = 2; // ID of leg 2 motor
+const uint8_t DXL_ID3 = 3; // ID of pendulum motor
 const uint8_t SWITCH_LEG1 = 6; //pin number for limit switch on right leg
 const uint8_t SWITCH_LEG2 = 7; //pin number for limit switch on left leg
 const float HOME_DXL1 = 345; // Home position for DXL_ID1. To calibrate 
 const float HOME_DXL2 = 2839; // Home position for DXL_ID2. To calibrate
-const float MIDDLE_DXL3 = 2607;
 const float DESIRED_SPEED = 60; // Desired speed for the motor in motion. Adjust to liking 
 const float DXL_PROTOCOL_VERSION = 2.0;
-const uint8_t MAXCHARS = 30;
-const float LIMIT = 110; //Current limit for pendulum motor
+const uint8_t MAXCHARS = 30; // Maximum amount of characters in moveQueue
+const float LIMIT = 110; // Current limit for pendulum motor
 const int PEND_LEG1 = 1;
 const int PEND_LEG2 = 2;
 const int INIT_POS = 3;
@@ -96,16 +95,16 @@ const int INIT_POS = 3;
 // Global variables
 bool init_pos = true; // True until all motors have been initialised and are at home position
 bool first = false; // True for the first cycle of loop only
-bool leg1_walk = false;
-bool leg2_walk = false;
+bool leg1_walk = false; // True if leg 1 is ready to walk
+bool leg2_walk = false; // True if leg 2 is ready to walk
 bool readInProgress = false;
 bool walking = false;
 float dxl3_pos1 = 0; // Position of DXL_ID3 when the pendulum is on the side of leg 2. To calibrate
-float dxl3_pos2 = 0;
-float dxl3_middle = 0;
-float leg_speed = 0;
+float dxl3_pos2 = 0; // Position of DXL_ID3 when the pendulum is on the side of leg 1. To calibrate
+float dxl3_middle = 0; // Position of DXL_ID3 when pendulum is vertical 
+float leg_speed = 0; // Speed of motors 1 and 2
 char moveQueue[MAXCHARS];
-char state = 'P';
+char state = 'P'; // State of the robot
 int queueLength = 0;
 int counter = 0;
 
