@@ -7,7 +7,7 @@ As part of a university project, the team Les Ti'namis set out to create a biped
 
 In this GitHub repository, users will have access to the CAD files of all the parts used, as well as those related to the assemblies, while also being able to add their technical drawings. Additionally, there will be the codes used to program the activation of the motors and their interaction via an interface. The sections below briefly elaborate on the content available to the public.
 ### Global architecture
-![image](https://github.com/Svetoscope/Walk-Man/assets/108663152/dc2a50e7-9b65-435d-a812-454d427c105e)
+![image](https://github.com/Svetoscope/Walk-Man/assets/108663152/3d6c019c-59bf-4007-aa0e-1d57f6c1e541)
 The preceding figure illustrates all the modules present in the project while demonstrating their interactions. To summarize, the user first selects an option from the interface. Depending on the chosen option, an instruction is then sent to an OpenRB via a computer displaying the interface. Following this instruction, the OpenRB sends a power command to one of the motors, which executes the movement of one of the legs or the inverse pendulum. The movement of a leg simply initiates a stride, allowing the robot to take a step forward. The activation of the inverse pendulum, on the other hand, moves a mass supported by a shaft from one side to the other of the robot to shift its center of mass. This functionality represents our balancing system, which aims to maintain the robot's balance. Once the movement is completed, feedback regarding the state of the robot is then sent to the interface from the OpenRB, which is awaiting a new instruction.
 
 ### CAD
