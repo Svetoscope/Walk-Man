@@ -17,11 +17,11 @@ The file WalkMan_CAD contains all the CAD files produced for the complete fabric
 The file s4_cpp contains all the code implemented in the OpenRB in C++. It is dedicated to the motors and movement of the associated legs, as well as the movement of the inverse pendulum. It is well-commented and easy to understand and use.
 
 ### Arduino IDE setup
-To run and upload this code to an OpenRb-150 from the Arduino IDE you will need to first add the board and library necessary on your Aruino IDE.
+To run and upload this code to an OpenRb-150 from the Arduino IDE you will need to first add the board and library on your Aruino IDE.
 Please refer to the OpenRb-150 from ROBOTIS e-manual for all the instuction : https://emanual.robotis.com/docs/en/parts/controller/openrb-150/#development-environment.
 
 ### Interface
-The file s4_python contains the Python codes related to the interface and serial port communication with the OpenRB. It is also well-commented and easy to understand. The figure below shows the appearance of the interface once the code is executed.
+The file s4_python contains the Python codes related to the interface and serial port communication with the OpenRB. It is also well-commented and easy to understand. The file to run is the file entitled main.py. The figure below shows the appearance of the interface once the code is executed.
 ![image](https://github.com/Svetoscope/Walk-Man/assets/108663152/585d053f-fbb1-4536-a182-47b7b1134d8f)
 
 
