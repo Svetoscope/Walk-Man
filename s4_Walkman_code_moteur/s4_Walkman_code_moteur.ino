@@ -25,18 +25,6 @@
  */
 
 
-/*
-  Message read from Pi: <(letter describing movement to do)>
-  Feedback message (To Pi): <(current movement letter)>
-  Possible letters for movements:
-    W: Walking
-    S: stand
-    N: no movement
-    F: feedback requested
-    T: launch local test
-*/
-
-
 #include <Dynamixel2Arduino.h>
 
 // Please modify it to suit your hardware.
@@ -75,6 +63,8 @@
   const int DXL_DIR_PIN = 2; // DYNAMIXEL Shield DIR PIN
 #endif
 
+
+
 // Constant variables 
 const uint8_t DXL_ID1 = 1; // ID of leg 1 motor
 const uint8_t DXL_ID2 = 2; // ID of leg 2 motor
@@ -97,18 +87,18 @@ bool init_pos = true; // True until all motors have been initialised and are at 
 bool first = false; // True for the first cycle of loop only
 bool leg1_walk = false; // True if leg 1 is ready to walk
 bool leg2_walk = false; // True if leg 2 is ready to walk
-bool readInProgress = false;
+bool readInProgress = false; // True if the serial port is being read
 bool walking = false;
 float dxl3_pos1 = 0; // Position of DXL_ID3 when the pendulum is on the side of leg 2. To calibrate
 float dxl3_pos2 = 0; // Position of DXL_ID3 when the pendulum is on the side of leg 1. To calibrate
 float dxl3_middle = 0; // Position of DXL_ID3 when pendulum is vertical 
 float leg_speed = 0; // Speed of motors 1 and 2
-char moveQueue[MAXCHARS];
+char moveQueue[MAXCHARS]; // Queue of movements to do
 char state = 'P'; // State of the robot
-int queueLength = 0;
+int queueLength = 0; // Current length of movement queue
 int counter = 0;
 
-
+// Creating the dxl object
 Dynamixel2Arduino dxl(DXL_SERIAL, DXL_DIR_PIN);
 
 //This namespace is required to use Control table item names
@@ -118,7 +108,8 @@ void setup() {
   // Use Serial to debug.
   DEBUG_SERIAL.begin(9600);
 
-  Serial.begin(115200); // ***** 
+  // Communication port baud rate. This has to match with the baudrate used in the Python code
+  Serial.begin(115200);  
 
   // Set Port baudrate to 57600bps. This has to match with DYNAMIXEL baudrate.
   dxl.begin(57600);
@@ -136,11 +127,12 @@ void setup() {
 }
 
 void loop() {
-  // Only does this function once
   if(init_pos){
+    // Only does this function once
     position_init(); // Sets motors to their home position
   }
-  if(queueLength != 0){
+  if(queueLength != 0){ 
+    // If there's somethnig in the movequeue we change the state and remove that item from the queue
     state = moveQueue[0];
     removeFirstInQueue();
     counter = 0;
@@ -148,7 +140,7 @@ void loop() {
 
   switch(state){
     case 'P':
-      // Stop the robot
+      // Stops the robot
       break;
 
     case 'A':
@@ -288,15 +280,16 @@ void position_init(){
 
   
   if(dxl3_pos1 < 0 || dxl3_pos2 < 0){
+    // Used to set both values to positive values 
     dxl3_pos1 = dxl3_pos1 + 4095;
     dxl3_pos2 = dxl3_pos2 + 4095;
   }
-  float ecart = dxl3_pos2-dxl3_pos1;
+  float gap = dxl3_pos2-dxl3_pos1;
   // Finds the vertical position of pendulum
-  if((int(ecart) % 2) == 0){
-    dxl3_middle = ecart/2;
+  if((int(gap) % 2) == 0){
+    dxl3_middle = gap/2;
   }else{
-    dxl3_middle = (ecart-1)/2;
+    dxl3_middle = (gap-1)/2;
   }
   counter++;
 }
@@ -315,7 +308,7 @@ void leg1_walking(){
     }
     // End of cycle conditions
     if((dxl.getPresentPosition(DXL_ID1) > (pos_end - 100)) && (dxl.getPresentPosition(DXL_ID1) < (pos_end + 100))){
-      dxl.setGoalVelocity(DXL_ID1, 0);
+      dxl.setGoalVelocity(DXL_ID1, 0); // Note that the speed is set to 0 but the torque is never turned off for leg movements
       walking = false;
       break;
     }
@@ -338,8 +331,7 @@ void leg2_walking(){
     }
     // End of cycle conditions
     if((dxl.getPresentPosition(DXL_ID2) > (pos_end - 100)) && (dxl.getPresentPosition(DXL_ID2) < (pos_end + 100))){
-      //dxl.torqueOff(DXL_ID2);
-      dxl.setGoalVelocity(DXL_ID2, 0);
+      dxl.setGoalVelocity(DXL_ID2, 0); // Note that the speed is set to 0 but the torque is never turned off for leg movements
       walking = false;
       break;
     }
@@ -388,17 +380,34 @@ float getPendulumSpeed(float pos){
 }
 
 void addToQueue(char charac) {
+  // Adds any given character to the move queue
   moveQueue[queueLength] = charac;
   queueLength++;
 }
 
 void readSerial(){
+  // Function used to read movements from the serial port
+  /*
+  Message read from Serial: <(letter describing movement to do)>
+  Feedback message (To Serial): <(current movement letter)>
+  Possible letters for movements:
+    A: Walking slowly
+    B: Walking normally
+    C: Walking fast
+    N: Neutral
+    P: Park
+    F: Feedback requested
+    T: Launch local test
+*/
+
+
   char startMarker = '<';
   char endMarker = '>';
   char lastCharRead;
   char msgToSend[3] = {'<', 'N', '>'};
 
   while(Serial.available()){
+    // Loops for every character available on the serial port
     lastCharRead = Serial.read();
   
     if(readInProgress){
@@ -406,7 +415,7 @@ void readSerial(){
         
         if(lastCharRead == 'F'){
           msgToSend[1] = 'R';
-          state = 'P';
+          state = 'P'; // Puts the state to park so no movement will be done if feedback is requested from python script
         }else{
           msgToSend[1] = lastCharRead;
           addToQueue(lastCharRead);
@@ -430,6 +439,7 @@ void readSerial(){
 }
 
 void removeFirstInQueue() {
+  // Remove the first letter from the queue and compacts everything back 
   for(int i = 0; i < queueLength-1; i++){
     moveQueue[i] = moveQueue[i+1];
   }
@@ -439,10 +449,14 @@ void removeFirstInQueue() {
 
 
 void doTest(){
+  // Add any automatic test that you wish to do 
 
 }
 
 void errorMessage(int location){
+  // Sends an error message to de debug serial, turn off the torque in any dxl and will return a non-associated letter to the computer so that its error counter increments. 
+  // Will require a reboot of the chip to start moving again.
+
   bool messageWritten = false;
   while(true){
     dxl.torqueOff(DXL_ID1);
